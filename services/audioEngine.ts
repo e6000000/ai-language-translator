@@ -11,6 +11,13 @@ export interface AudioEngineConfig {
  * AudioEngine v2.00
  * Handles all Web Audio API interactions with a focus on low-latency streaming.
  * Includes "Catch-up" logic to prevent audio drift.
+ * 
+
+
+
+
+
+ 
  */
 export class AudioEngine {
   private inputCtx: AudioContext | null = null;

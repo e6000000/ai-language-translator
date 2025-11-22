@@ -42,5 +42,34 @@
 </head>
   <body>
     <div id="root"></div>
-  </body>
+  </body><!-- User /es geht nicht , also rewrite die audio uebersetzung engine und warscheinlich prompt anweisungen ## hier nochmal die eigentliche anforderung '' nach den erfahrungen bisher bist du nun in der lage nur die audio engine wie beim ersten mal neu zu schreiben, am liebsten ein design in der alles was mit audio und latenz zu tun hat in separate file, falls es sinn macht ## also aufgabe audio engine neu schreiben:
+"""
+(german and english): live audio simultan translation ## windows 10 audio input (mic) device dropdown auswahl and output device dropdown auswahl ## ausio in translation to out translation ## out translation must start maximum 3 sec nach audio signal input ## microfon pegel anzeige ## minimale verzoegerung des ausgabe uebersetzten audio stream hat oberste !IMPORTANT!! prioritaet ## orientiere dich am beispiel UI design ## bevorzugt wird gemini audio translation mode , oder mach es besser + account com24ed@gmail.com ## alles verstanden oder frage genau nach
+"""
+version_2.00
+Gemini 3 Pro Preview
+Ran for 93s
+lightbulb
+Thought for 34 seconds
+Das ist eine klare Anforderung. Um die Latenzprobleme endgültig zu lösen und die Architektur sauberer zu gestalten, schreibe ich die Audio-Engine komplett neu.
+Das Konzept der Version 2.00:
+Neue Datei services/audioEngine.ts:
+Hier findet jegliche Audio-Verarbeitung statt.
+Drift-Korrektur: Das Wichtigste für Latenz. Wenn der Audio-Stream vom Server langsamer ankommt als die Echtzeit, springt die Engine sofort nach vorne (currentTime), anstatt eine Warteschlange aufzubauen (was zu Verzögerungen führt).
+Downsampling & Upsampling: Sauber getrennt, um die 16kHz Anforderung von Gemini und die 48kHz/44.1kHz des Browsers zu matchen.
+Device Management: Kapselung von setSinkId (Output) und getUserMedia (Input).
+Optimiertes Prompting (App.tsx):
+Die Anweisung an das Modell wird verschärft, um Simultandolmetschen zu erzwingen (kein Warten auf Satzenden).
+Service Layer (services/geminiLiveService.ts):
+Wird entschlackt. Er leitet nur noch Daten zwischen audioEngine und der Gemini API weiter.
+Hier ist der Rewrite:
+services/audioEngine.ts
+check_circle
+services/geminiLiveService.ts
+check_circle
+App.tsx
+check_circle
+Checkpoint
+
+// -->
 </html>
