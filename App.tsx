@@ -40,6 +40,9 @@ const App: React.FC = () => {
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED);
   const [error, setError] = useState<string | null>(null);
   
+  // UI State
+  const [showSettings, setShowSettings] = useState<boolean>(false);
+  
   // Configuration
   const [languageMode, setLanguageMode] = useState<LanguageMode>(LanguageMode.AUTO);
   const [sourceLanguage, setSourceLanguage] = useState<string>('English');
@@ -157,183 +160,203 @@ const App: React.FC = () => {
   const isConnecting = connectionState === ConnectionState.CONNECTING;
 
   return (
-    <div className="h-screen w-full bg-slate-950 text-slate-200 font-sans flex overflow-hidden">
+    <div className="h-screen w-full bg-[#0b1120] text-slate-200 font-sans flex flex-col overflow-hidden relative">
       
-      {/* LEFT SIDEBAR - CONTROLS */}
-      <aside className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20 shadow-2xl">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-800">
-          <div className="flex items-center gap-3 mb-1">
-             <div className="w-8 h-8 bg-cyan-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-600/20">
-               <span className="font-bold text-white text-lg">V1</span>
-             </div>
-             <h1 className="font-bold text-lg tracking-tight text-white">Gemini Fast Engine</h1>
-          </div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium ml-11">Low Latency Core</p>
+      {/* HEADER with SETTINGS BUTTON */}
+      <header className="shrink-0 h-16 px-6 flex items-center justify-between bg-slate-900/50 backdrop-blur-md border-b border-white/5 z-20">
+        <div className="flex items-center gap-2">
+           <div className="w-6 h-6 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded flex items-center justify-center">
+             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/></svg>
+           </div>
+           <span className="font-bold text-sm tracking-tight text-slate-200">Gemini Live</span>
         </div>
 
-        {/* Main Controls */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
-          
-          {/* Status / Action */}
-          <div className="space-y-3">
-             <button
+        <button 
+          onClick={() => setShowSettings(true)}
+          className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </header>
+
+      {/* MAIN HERO SECTION */}
+      <div className="shrink-0 flex flex-col items-center pt-6 pb-4 bg-gradient-to-b from-[#0b1120] to-[#0f172a] relative z-10 shadow-xl shadow-black/20">
+         
+         {/* MICROPHONE BUTTON */}
+         <div className="relative group mb-6">
+            {/* Glow Ring */}
+            <div className={`absolute -inset-4 rounded-full blur-xl transition-all duration-500 ${isConnected ? 'bg-red-500/30 opacity-100 scale-100' : 'bg-blue-500/20 opacity-0 scale-50'}`} />
+            
+            <button
               onClick={toggleConnection}
               disabled={!hasPermissions || isConnecting}
-              className={`w-full py-4 px-4 rounded-lg font-bold text-xs uppercase tracking-wider transition-all transform active:scale-95 shadow-lg
+              className={`
+                relative w-24 h-24 md:w-28 md:h-28 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300
                 ${isConnected 
-                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 shadow-red-900/10' 
-                  : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-blue-900/20 border border-transparent'
+                  ? 'bg-slate-900 border-4 border-red-500 text-red-500 hover:scale-105' 
+                  : 'bg-blue-600 hover:bg-blue-500 border-4 border-blue-400/30 text-white hover:scale-105'
                 }
                 ${(!hasPermissions || isConnecting) ? 'opacity-50 grayscale cursor-not-allowed' : ''}
               `}
             >
-              {isConnecting ? 'INITIALIZING...' : isConnected ? 'STOP ENGINE' : 'START ENGINE'}
+              {isConnecting ? (
+                 <svg className="animate-spin h-10 w-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : isConnected ? (
+                <div className="w-8 h-8 bg-red-500 rounded animate-pulse" />
+              ) : (
+                <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                </svg>
+              )}
             </button>
-            {error && (
-              <div className="text-xs text-red-400 bg-red-950/30 p-2 rounded border border-red-900/50 leading-tight">
-                {error}
-              </div>
+         </div>
+
+         {/* LIVE TRANSLATION DISPLAY */}
+         <div className="w-full max-w-3xl px-6 text-center min-h-[80px] flex items-center justify-center">
+            {latestTranslation ? (
+              <p className="text-2xl md:text-3xl font-medium text-slate-100 leading-relaxed animate-in fade-in slide-in-from-bottom-2 duration-300">
+                "{latestTranslation}"
+              </p>
+            ) : (
+              <p className="text-slate-600 text-lg font-light italic">
+                {isConnected ? "Listening for speech..." : "Tap the microphone to start"}
+              </p>
             )}
-          </div>
+         </div>
+      </div>
 
-          {/* Device Config Card */}
-          <div className="bg-slate-950/50 rounded-xl p-4 border border-slate-800 space-y-5">
-             
-             {/* Language Selection */}
-             <div className="flex flex-col gap-1 w-full">
-                <label className="text-xs text-slate-400 font-medium uppercase tracking-wider">Translation Mode</label>
-                <div className="relative">
-                  <select
-                    value={languageMode}
-                    onChange={(e) => setLanguageMode(e.target.value as LanguageMode)}
-                    disabled={isConnected}
-                    className="w-full appearance-none bg-slate-800 border border-slate-700 hover:border-slate-600 text-slate-200 text-sm rounded-lg p-2.5 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value={LanguageMode.AUTO}>Automatic (Bi-directional)</option>
-                    <option value={LanguageMode.DE_TO_EN}>German → English</option>
-                    <option value={LanguageMode.EN_TO_DE}>English → German</option>
-                    <option value={LanguageMode.CUSTOM}>Custom Language Pair</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                  </div>
-                </div>
-
-                {/* Custom Language Selectors */}
-                {languageMode === LanguageMode.CUSTOM && (
-                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-800/50 animate-in slide-in-from-top-2 fade-in">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-slate-500 font-bold uppercase">From</label>
-                      <select
-                        value={sourceLanguage}
-                        onChange={(e) => setSourceLanguage(e.target.value)}
-                        disabled={isConnected}
-                        className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded p-2 focus:border-cyan-500 outline-none"
-                      >
-                        {SUPPORTED_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-slate-500 font-bold uppercase">To</label>
-                      <select
-                        value={targetLanguage}
-                        onChange={(e) => setTargetLanguage(e.target.value)}
-                        disabled={isConnected}
-                        className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded p-2 focus:border-cyan-500 outline-none"
-                      >
-                        {SUPPORTED_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                )}
-             </div>
-
-             <div className="w-full h-px bg-slate-800/80" />
-
-             <div className="space-y-3">
-                <DeviceSelector 
-                  type="input" 
-                  label="Microphone" 
-                  selectedDeviceId={inputDeviceId} 
-                  onDeviceChange={handleInputChange}
-                  disabled={isConnected} 
-                />
-                <AudioVisualizer volume={inputVolume} isActive={isConnected} label="Mic Level" />
-             </div>
-
-             <div className="w-full h-px bg-slate-800/80" />
-
-             <div className="space-y-3">
-                <DeviceSelector 
-                  type="output" 
-                  label="Speakers" 
-                  selectedDeviceId={outputDeviceId} 
-                  onDeviceChange={handleOutputChange}
-                  disabled={false} 
-                />
-                <AudioVisualizer volume={outputVolume} isActive={isConnected} label="Output Level" />
-             </div>
-          </div>
-
-        </div>
-
-        {/* Footer Info */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/30 text-[10px] font-mono text-slate-500 flex justify-between">
-           <span>Turbo Audio Engine</span>
-           <span>16kHz Direct</span>
-        </div>
-      </aside>
-
-      {/* RIGHT MAIN AREA - CHAT */}
-      <main className="flex-1 flex flex-col relative bg-slate-950">
-        
-        {/* Large Display Area */}
-        <div className="h-1/3 min-h-[200px] p-8 flex items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-900 relative">
-          <div className="absolute top-6 left-6 flex items-center gap-2">
-             <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-slate-700'}`} />
-             <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-500">Live Stream Feed</span>
-          </div>
-          
-          <div className="max-w-4xl text-center">
-             {latestTranslation ? (
-               <p className="text-3xl md:text-4xl font-medium text-slate-100 leading-relaxed animate-in fade-in slide-in-from-bottom-2">
-                 "{latestTranslation}"
-               </p>
-             ) : (
-               <p className="text-slate-700 text-xl font-light italic">
-                 {isConnected ? "Listening..." : "Engine Ready. Press Start."}
-               </p>
-             )}
-          </div>
-        </div>
-
-        {/* Scrolling Transcript History */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#0b1120]">
-           {transcripts.map((t) => (
-             <div key={t.id} className={`flex flex-col ${t.isUser ? 'items-end' : 'items-start'} animate-in fade-in duration-300`}>
-                <div className={`max-w-[85%] p-4 rounded-lg text-base leading-relaxed shadow-md ${
-                  t.isUser 
-                    ? 'bg-slate-800 text-slate-300 border border-slate-700 rounded-br-none' 
-                    : 'bg-cyan-900/20 text-cyan-100 border border-cyan-900/30 rounded-bl-none'
-                }`}>
-                   {t.text}
-                </div>
-                <span className="text-[9px] text-slate-600 mt-1 uppercase tracking-wider font-semibold px-1">
-                  {t.isUser ? 'Original' : 'Translation'}
-                </span>
-             </div>
-           ))}
-           <div ref={transcriptEndRef} className="h-2" />
-        </div>
-
-        {/* Bottom Status Bar */}
-        <div className="h-8 bg-slate-900 border-t border-slate-800 flex items-center justify-end px-4 text-[10px] font-mono text-green-500/80">
-           {isConnected && <span>LINK ACTIVE • LOW LATENCY MODE</span>}
-        </div>
+      {/* TRANSCRIPT LIST */}
+      <main className="flex-1 overflow-y-auto p-4 bg-slate-950 scroll-smooth">
+         <div className="max-w-3xl mx-auto space-y-4 pb-12">
+            {transcripts.map((t) => (
+              <div key={t.id} className={`flex flex-col ${t.isUser ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2`}>
+                 <div className={`max-w-[85%] p-3 rounded-2xl text-sm md:text-base leading-relaxed ${
+                   t.isUser 
+                     ? 'bg-slate-800 text-slate-300 rounded-br-none border border-slate-700/50' 
+                     : 'bg-[#1e293b] text-blue-100 rounded-bl-none border border-blue-900/30'
+                 }`}>
+                    {t.text}
+                 </div>
+                 <span className="text-[9px] text-slate-600 mt-1 uppercase tracking-wider font-bold px-1 opacity-60">
+                   {t.isUser ? 'Original' : 'Translation'}
+                 </span>
+              </div>
+            ))}
+            <div ref={transcriptEndRef} className="h-4" />
+         </div>
       </main>
+
+      {/* SETTINGS MODAL */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              
+              <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                 <h2 className="font-bold text-slate-200 flex items-center gap-2">
+                   <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                   Settings
+                 </h2>
+                 <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-white/10 rounded-full transition-colors">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                 </button>
+              </div>
+
+              <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+                 
+                 {/* Language Settings */}
+                 <section className="space-y-3">
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Language Configuration</h3>
+                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50">
+                      <label className="text-xs text-slate-400 block mb-2">Translation Mode</label>
+                      <select
+                        value={languageMode}
+                        onChange={(e) => setLanguageMode(e.target.value as LanguageMode)}
+                        disabled={isConnected}
+                        className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded p-2.5 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      >
+                        <option value={LanguageMode.AUTO}>Auto (Bi-directional)</option>
+                        <option value={LanguageMode.DE_TO_EN}>German → English</option>
+                        <option value={LanguageMode.EN_TO_DE}>English → German</option>
+                        <option value={LanguageMode.CUSTOM}>Custom</option>
+                      </select>
+
+                      {languageMode === LanguageMode.CUSTOM && (
+                        <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-800">
+                          <div>
+                             <label className="text-[10px] text-slate-500 mb-1 block">Source</label>
+                             <select value={sourceLanguage} onChange={e => setSourceLanguage(e.target.value)} className="w-full bg-slate-800 text-xs p-2 rounded border border-slate-700">
+                                {SUPPORTED_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+                             </select>
+                          </div>
+                          <div>
+                             <label className="text-[10px] text-slate-500 mb-1 block">Target</label>
+                             <select value={targetLanguage} onChange={e => setTargetLanguage(e.target.value)} className="w-full bg-slate-800 text-xs p-2 rounded border border-slate-700">
+                                {SUPPORTED_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+                             </select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                 </section>
+
+                 {/* Audio Settings */}
+                 <section className="space-y-3">
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Audio Devices</h3>
+                    
+                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50 space-y-4">
+                       <div>
+                          <DeviceSelector 
+                            type="input" 
+                            label="Input Microphone" 
+                            selectedDeviceId={inputDeviceId} 
+                            onDeviceChange={handleInputChange}
+                            disabled={isConnected} 
+                          />
+                          <div className="mt-2">
+                             <AudioVisualizer volume={inputVolume} isActive={isConnected} label="" />
+                          </div>
+                       </div>
+
+                       <div className="w-full h-px bg-slate-800" />
+
+                       <div>
+                          <DeviceSelector 
+                            type="output" 
+                            label="Output Speaker" 
+                            selectedDeviceId={outputDeviceId} 
+                            onDeviceChange={handleOutputChange}
+                            disabled={false} 
+                          />
+                          <div className="mt-2">
+                             <AudioVisualizer volume={outputVolume} isActive={isConnected} label="" />
+                          </div>
+                       </div>
+                    </div>
+                 </section>
+
+              </div>
+              
+              <div className="p-4 bg-slate-900 border-t border-slate-800 text-center">
+                 <p className="text-[10px] text-slate-600 font-mono">v2.1.0 • Low Latency Audio Engine</p>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {error && (
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-40 bg-red-500/90 text-white text-xs px-4 py-2 rounded-full shadow-lg animate-in fade-in slide-in-from-bottom-4">
+          {error}
+        </div>
+      )}
+
     </div>
   );
 };
