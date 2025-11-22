@@ -1,18 +1,20 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ConnectionState, Transcript } from './types';
 import { GeminiLiveService } from './services/geminiLiveService';
 import DeviceSelector from './components/DeviceSelector';
 import AudioVisualizer from './components/AudioVisualizer';
 
+// STRICT prompt for SIMULTANEOUS interpretation
 const SYSTEM_INSTRUCTION = `
-You are a highly skilled simultaneous interpreter. 
-Your mission is to translate spoken audio bidirectionally between German and English in real-time.
-- If you hear German, translate it to English immediately.
-- If you hear English, translate it to German immediately.
-- Maintain the original tone and emotion.
-- Do NOT summarize. Translate sentence by sentence or phrase by phrase.
-- Do NOT respond to the content of the conversation (e.g., do not answer questions). ONLY TRANSLATE.
-- Keep latency to the absolute minimum. Output audio as soon as you have a translatable chunk.
+You are a professional simultaneous interpreter.
+Your goal is to translate spoken audio from German to English (and vice versa) with ABSOLUTE MINIMAL LATENCY.
+
+RULES:
+1. STREAMING: Do not wait for a full sentence. Translate phrase-by-phrase immediately.
+2. OVERLAP: Do not stop speaking when the user speaks. Continue translating what you heard previously.
+3. CONCISENESS: Do not add pleasantries like "I understand" or "Here is the translation". JUST TRANSLATE.
+4. AUDIO ONLY: Focus on the audio output.
 `;
 
 const App: React.FC = () => {
@@ -54,10 +56,16 @@ const App: React.FC = () => {
       onOutputVolumeChange: setOutputVolume,
       onTranscript: (text, isUser) => {
          if (!isUser) {
-             setLatestTranslation(text);
+             // Accumulate partial results for the "Big Display" if needed, 
+             // or just show the latest chunk. 
+             // For simultaneous, text chunks come in small pieces.
+             setLatestTranslation(prev => {
+                // Heuristic: if text starts with capital, maybe new sentence, clear old? 
+                // For now, just show the current chunk to keep it 'live'
+                return text;
+             });
          }
          setTranscripts(prev => {
-           // Simple append for live view
            return [...prev, { id: Date.now().toString(), text, isUser, timestamp: new Date() }];
          });
       },
@@ -130,11 +138,11 @@ const App: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-cyan-400 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-cyan-500/20">
-                G
+                V2
               </div>
-              <h1 className="text-lg font-bold text-white tracking-tight">Gemini Live</h1>
+              <h1 className="text-lg font-bold text-white tracking-tight">Gemini Live Engine</h1>
             </div>
-            <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wide">Simultaneous Translator</p>
+            <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wide">Low Latency Audio Core</p>
           </div>
 
           {/* Main Toggle */}
@@ -150,7 +158,7 @@ const App: React.FC = () => {
             `}
           >
              {isConnecting && <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
-            {isConnecting ? 'Connecting...' : isConnected ? 'Stop Session' : 'Start Live'}
+            {isConnecting ? 'Initializing...' : isConnected ? 'Stop Engine' : 'Start Engine'}
           </button>
 
           <div className="h-px bg-slate-800/50" />
@@ -162,7 +170,7 @@ const App: React.FC = () => {
             <div className="space-y-3 bg-slate-800/30 p-3 rounded-lg border border-slate-800/50">
               <DeviceSelector 
                 type="input" 
-                label="Input (Microphone)" 
+                label="Input Source" 
                 selectedDeviceId={inputDeviceId} 
                 onDeviceChange={handleInputChange}
                 disabled={isConnected} 
@@ -171,7 +179,7 @@ const App: React.FC = () => {
                 <AudioVisualizer 
                   volume={inputVolume} 
                   isActive={isConnected} 
-                  label="Mic Level (Pegel)" 
+                  label="Input Gain" 
                 />
               </div>
             </div>
@@ -180,7 +188,7 @@ const App: React.FC = () => {
             <div className="space-y-3 bg-slate-800/30 p-3 rounded-lg border border-slate-800/50">
               <DeviceSelector 
                 type="output" 
-                label="Output (Speaker)" 
+                label="Output Destination" 
                 selectedDeviceId={outputDeviceId} 
                 onDeviceChange={handleOutputChange}
                 disabled={false} 
@@ -189,7 +197,7 @@ const App: React.FC = () => {
                 <AudioVisualizer 
                   volume={outputVolume} 
                   isActive={isConnected} 
-                  label="Speaker Level (Pegel)" 
+                  label="Output Gain" 
                 />
               </div>
             </div>
@@ -197,7 +205,7 @@ const App: React.FC = () => {
 
           {error && (
             <div className="mt-auto text-[11px] font-medium text-red-300 bg-red-950/50 p-3 rounded-lg border border-red-900/50 leading-tight">
-              Error: {error}
+              System Error: {error}
               <button onClick={() => setError(null)} className="block mt-2 text-red-400 underline decoration-red-400/30 hover:text-red-200">Dismiss</button>
             </div>
           )}
@@ -206,44 +214,35 @@ const App: React.FC = () => {
         {/* Right Panel: Content */}
         <div className="flex-1 bg-slate-950 flex flex-col relative">
           
-          {/* Latest Output Box - New Requirement */}
+          {/* Latest Output Box */}
           <div className="p-6 bg-slate-900 border-b border-slate-800 shadow-xl z-10">
             <h2 className="text-xs font-bold text-cyan-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></span>
-              Latest Translation
+              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-slate-600'}`}></span>
+              Live Stream Feed
             </h2>
-            <div className="min-h-[120px] flex items-center justify-center p-4 bg-slate-950 rounded-xl border border-slate-800/60">
+            <div className="min-h-[100px] flex items-center justify-center p-4 bg-slate-950 rounded-xl border border-slate-800/60 shadow-inner">
                {latestTranslation ? (
-                 <p className="text-xl md:text-2xl font-medium text-slate-100 text-center leading-relaxed animate-in fade-in slide-in-from-bottom-2 duration-300">
+                 <p className="text-xl font-medium text-cyan-50 text-center animate-in fade-in duration-150">
                    "{latestTranslation}"
                  </p>
                ) : (
-                 <p className="text-slate-700 text-sm italic">Waiting for speech...</p>
+                 <p className="text-slate-700 text-sm italic">Engine Ready. Waiting for audio stream...</p>
                )}
             </div>
           </div>
 
           {/* Transcript History */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-950/50">
-            {transcripts.length === 0 && !latestTranslation && (
-              <div className="h-full flex flex-col items-center justify-center text-slate-700 gap-4 opacity-30 select-none">
-                <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
-                </svg>
-                <p className="text-sm font-medium">Start speaking in German or English</p>
-              </div>
-            )}
-            
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-950/50 scroll-smooth">
             {transcripts.map((t, i) => (
               <div key={i} className={`flex ${t.isUser ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] md:max-w-[75%] flex flex-col ${t.isUser ? 'items-end' : 'items-start'}`}>
-                   <span className="text-[10px] text-slate-500 mb-1 px-1 font-medium uppercase tracking-wide">
-                    {t.isUser ? 'You (Input)' : 'Gemini (Output)'}
+                <div className={`max-w-[85%] flex flex-col ${t.isUser ? 'items-end' : 'items-start'}`}>
+                   <span className="text-[9px] text-slate-600 mb-1 px-1 font-mono uppercase">
+                    {t.isUser ? 'IN' : 'OUT'}
                   </span>
-                  <div className={`px-5 py-3.5 text-sm md:text-base leading-relaxed shadow-sm ${
+                  <div className={`px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
                     t.isUser 
-                      ? 'bg-slate-800 text-slate-200 rounded-2xl rounded-tr-none border border-slate-700/50' 
-                      : 'bg-cyan-950/30 text-cyan-100 rounded-2xl rounded-tl-none border border-cyan-900/30'
+                      ? 'bg-slate-800/80 text-slate-300 rounded-lg rounded-tr-none border border-slate-700/50' 
+                      : 'bg-cyan-900/20 text-cyan-200 rounded-lg rounded-tl-none border border-cyan-800/30'
                   }`}>
                     {t.text}
                   </div>
@@ -254,9 +253,11 @@ const App: React.FC = () => {
           </div>
           
           {/* Footer Info */}
-           <div className="px-4 py-2 bg-slate-900 border-t border-slate-800 flex justify-between items-center text-[10px] text-slate-600">
-              <span>Low Latency Mode Active (&lt;500ms)</span>
-              <span className="font-mono">v1.0.2</span>
+           <div className="px-4 py-2 bg-slate-900 border-t border-slate-800 flex justify-between items-center text-[10px] text-slate-500 font-mono">
+              <span>Audio Engine v2.00 :: 16kHz PCM</span>
+              <span className={isConnected ? "text-green-500" : "text-slate-600"}>
+                  {isConnected ? "LINK ACTIVE" : "OFFLINE"}
+              </span>
            </div>
 
         </div>
