@@ -20,6 +20,7 @@ export enum LanguageMode {
   AUTO = 'AUTO',
   DE_TO_EN = 'DE_TO_EN',
   EN_TO_DE = 'EN_TO_DE',
+  CUSTOM = 'CUSTOM',
 }
 
 export interface TranslationConfig {
@@ -33,6 +34,12 @@ export interface Transcript {
   isUser: boolean;
   timestamp: Date;
   isFinal?: boolean; // To track if block is "done"
+}
+
+export interface AudioEngineConfig {
+  onInputVolume: (volume: number) => void;
+  onOutputVolume: (volume: number) => void;
+  onError: (message: string) => void;
 }
 
 // Extended AudioContext interface for setSinkId (experimental feature)
