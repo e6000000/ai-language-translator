@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ConnectionState, Transcript, LanguageMode } from './types';
 import { GeminiLiveService } from './services/geminiLiveService';
@@ -162,24 +161,60 @@ const App: React.FC = () => {
   return (
     <div className="h-screen w-full bg-[#0b1120] text-slate-200 font-sans flex flex-col overflow-hidden relative">
       
-      {/* HEADER with SETTINGS BUTTON */}
-      <header className="shrink-0 h-16 px-6 flex items-center justify-between bg-slate-900/50 backdrop-blur-md border-b border-white/5 z-20">
-        <div className="flex items-center gap-2">
+      {/* HEADER with AUDIO METERS */}
+      <header className="shrink-0 h-20 px-4 md:px-6 flex items-center justify-between bg-slate-900/50 backdrop-blur-md border-b border-white/5 z-20 gap-4">
+        
+        {/* Logo Area */}
+        <div className="flex items-center gap-2 shrink-0 w-[140px]">
            <div className="w-6 h-6 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded flex items-center justify-center">
              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/></svg>
            </div>
-           <span className="font-bold text-sm tracking-tight text-slate-200">Gemini Live</span>
+           <span className="font-bold text-sm tracking-tight text-slate-200 hidden sm:block">Gemini Live</span>
         </div>
 
-        <button 
-          onClick={() => setShowSettings(true)}
-          className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
+        {/* CENTRAL METER DISPLAY (Top of screen) */}
+        <div className="flex-1 max-w-2xl flex items-center justify-center gap-4 md:gap-8">
+            
+            {/* INPUT METER */}
+            <div className="flex flex-col w-full max-w-[240px]">
+               <div className="flex justify-between items-baseline mb-1 px-1">
+                 <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Input Microphone</span>
+               </div>
+               <AudioVisualizer 
+                 volume={inputVolume} 
+                 isActive={true} 
+                 className="h-2 md:h-3" 
+                 barCount={30}
+               />
+            </div>
+
+            {/* OUTPUT METER */}
+            <div className="flex flex-col w-full max-w-[240px]">
+               <div className="flex justify-between items-baseline mb-1 px-1">
+                 <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-wider">Output Speaker</span>
+               </div>
+               <AudioVisualizer 
+                 volume={outputVolume} 
+                 isActive={true} 
+                 className="h-2 md:h-3"
+                 barCount={30}
+               />
+            </div>
+        </div>
+
+        {/* Settings Button */}
+        <div className="shrink-0 w-[140px] flex justify-end">
+          <button 
+            onClick={() => setShowSettings(true)}
+            className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+            title="Settings"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       {/* MAIN HERO SECTION */}
