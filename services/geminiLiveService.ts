@@ -10,6 +10,7 @@ interface ServiceConfig {
   onOutputVolumeChange: (volume: number) => void;
   onTranscript: (text: string, isUser: boolean) => void;
   onError: (error: string) => void;
+  // Default instruction
   systemInstruction: string;
 }
 
@@ -52,7 +53,7 @@ export class GeminiLiveService {
     await this.audioEngine.setOutputDevice(deviceId);
   }
 
-  public async connect() {
+  public async connect(options?: { systemInstruction?: string }) {
     if (this.isConnected) return;
 
     this.config.onConnectionStateChange(ConnectionState.CONNECTING);
@@ -69,7 +70,8 @@ export class GeminiLiveService {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }, 
           },
-          systemInstruction: this.config.systemInstruction,
+          // Use override instruction if provided, else default
+          systemInstruction: options?.systemInstruction || this.config.systemInstruction,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },

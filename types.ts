@@ -1,3 +1,4 @@
+
 export interface AudioDevice {
   deviceId: string;
   label: string;
@@ -15,6 +16,12 @@ export enum ConnectionState {
   ERROR = 'ERROR',
 }
 
+export enum LanguageMode {
+  AUTO = 'AUTO',
+  DE_TO_EN = 'DE_TO_EN',
+  EN_TO_DE = 'EN_TO_DE',
+}
+
 export interface TranslationConfig {
   sourceLanguage: string;
   targetLanguage: string;
@@ -25,6 +32,7 @@ export interface Transcript {
   text: string;
   isUser: boolean;
   timestamp: Date;
+  isFinal?: boolean; // To track if block is "done"
 }
 
 // Extended AudioContext interface for setSinkId (experimental feature)
