@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface AudioVisualizerProps {
@@ -12,10 +13,14 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
   volume, 
   isActive, 
   label,
-  barCount = 24,
+  barCount = 16,
   className = "h-4"
 }) => {
   const activeSegments = Math.floor(volume * barCount);
+  
+  // Pre-calculate thresholds using integer math (approx 60% and 85%)
+  const thresholdYellow = Math.floor(barCount * 0.6);
+  const thresholdRed = Math.floor(barCount * 0.85);
 
   return (
     <div className="flex flex-col gap-1 w-full">
@@ -32,11 +37,10 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
       <div className={`${className} bg-slate-950 rounded border border-slate-800 p-[1px] md:p-[2px] relative overflow-hidden shadow-inner`}>
         <div className="flex h-full gap-[1px]">
             {Array.from({ length: barCount }).map((_, i) => {
-                // Calculate color based on position (Green -> Yellow -> Red)
-                const percentage = i / barCount;
+                // Simplified color logic without float division in loop
                 let bgColor = "bg-emerald-500";
-                if (percentage > 0.6) bgColor = "bg-yellow-400";
-                if (percentage > 0.85) bgColor = "bg-red-500";
+                if (i >= thresholdYellow) bgColor = "bg-yellow-400";
+                if (i >= thresholdRed) bgColor = "bg-red-500";
 
                 const isOn = isActive && i < activeSegments;
                 

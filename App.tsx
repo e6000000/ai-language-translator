@@ -4,6 +4,7 @@ import { ConnectionState, Transcript, LanguageMode } from './types';
 import { GeminiLiveService } from './services/geminiLiveService';
 import DeviceSelector from './components/DeviceSelector';
 import AudioVisualizer from './components/AudioVisualizer';
+import LiveDisplay from './components/LiveDisplay';
 
 const SUPPORTED_LANGUAGES = [
   'English', 'German', 'French', 'Spanish', 'Italian', 
@@ -12,15 +13,24 @@ const SUPPORTED_LANGUAGES = [
 ];
 
 const getSystemInstruction = (mode: LanguageMode, srcLang: string, tgtLang: string) => {
+  // OPTIMIZED: Semantic instructions for speed and style (Gemini native understanding)
+  const speedConfig = `
+    AUDIO_STYLE_INSTRUCTION:
+    - Pace: Fast (approx. 1.1x speed).
+    - Tone: Brisk, efficient, immediate.
+    - Instruction: Eliminate pauses between segments. Speak as soon as translation is ready.
+  `;
+
   const baseInstruction = `
-    SYSTEM: You are a high-speed simultaneous interpreter. 
-    LATENCY PRIORITY: MAXIMUM. 
-    PROTOCOL:
-    1. Translate audio chunks IMMEDIATELY as they arrive.
-    2. Do NOT wait for full sentences.
-    3. Do NOT summarize.
-    4. If the user is speaking, keep translating. Do not stop.
-    5. If silence, wait.
+    SYSTEM: You are a real-time simultaneous interpreter translating from ${srcLang} to ${tgtLang}.
+    ${speedConfig}
+    
+    CRITICAL LATENCY PROTOCOL:
+    1. MODE: STREAMING. Do not wait for full semantic completeness.
+    2. Translate audio chunks IMMEDIATELY as they arrive.
+    3. If a sentence is incomplete, translate the fragment meaningfully.
+    4. Do NOT summarize. Do NOT explain. Just translate.
+    5. Keep the flow continuous.
   `;
 
   switch (mode) {
@@ -42,6 +52,7 @@ const App: React.FC = () => {
   
   // UI State
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false); // For button feedback
   
   // Configuration
   const [languageMode, setLanguageMode] = useState<LanguageMode>(LanguageMode.AUTO);
@@ -56,15 +67,17 @@ const App: React.FC = () => {
 
   // Transcripts
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
-  const [latestTranslation, setLatestTranslation] = useState<string>("");
   const transcriptEndRef = useRef<HTMLDivElement>(null);
 
   const liveServiceRef = useRef<GeminiLiveService | null>(null);
 
-  // Auto-scroll transcript
+  // Auto-scroll transcript log (bottom)
   useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcripts, latestTranslation]);
+    // Only scroll main log if settings are NOT open to save resources
+    if (!showSettings) {
+      transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [transcripts, showSettings]);
 
   // Initialize Service
   useEffect(() => {
@@ -114,12 +127,8 @@ const App: React.FC = () => {
       // If same speaker and last block is not too huge, append.
       if (last && last.isUser === isUser && last.text.length < 600) {
         const updated = { ...last, text: last.text + text };
-        
-        if (!isUser) setLatestTranslation(updated.text);
         return [...prev.slice(0, -1), updated];
       }
-      
-      if (!isUser) setLatestTranslation(text);
       
       return [...prev, { 
         id: Date.now().toString(), 
@@ -137,9 +146,6 @@ const App: React.FC = () => {
       liveServiceRef.current.disconnect();
     } else {
       setError(null);
-      setTranscripts([]);
-      setLatestTranslation("");
-      
       // Generate instruction based on current mode selection
       const instruction = getSystemInstruction(languageMode, sourceLanguage, targetLanguage);
       liveServiceRef.current.connect({ systemInstruction: instruction });
@@ -168,52 +174,56 @@ const App: React.FC = () => {
       URL.revokeObjectURL(url);
   };
 
-  const handleDownloadTranscript = () => {
-    // Filter only Output (translated) text
-    const outputText = transcripts
-      .filter(t => !t.isUser)
-      .map(t => t.text)
-      .join('\n\n');
-    
-    if (!outputText) return;
+  const handleDownloadTranscript = useCallback(() => {
+    if (transcripts.length === 0) return;
 
-    // 500KB in bytes approx
-    const CHUNK_SIZE = 500 * 1024;
-    
-    // Logic: Seconds since midnight / 10 + (100000 - 6565)
-    // Adjusted offset: 93435
-    const now = new Date();
-    const midnight = new Date(now).setHours(0,0,0,0);
-    const secondsSinceMidnight = (now.getTime() - midnight) / 1000;
-    const timeUnit = Math.floor(secondsSinceMidnight / 10);
-    const baseTimeId = 93435 + timeUnit;
-    
-    const fullBlob = new Blob([outputText], { type: 'text/plain' });
-    
-    if (fullBlob.size <= CHUNK_SIZE) {
-       downloadBlob(fullBlob, `${baseTimeId}.txt`);
-    } else {
-       // Split logic: naive string slicing for simplicity
-       // 500KB is roughly 500,000 characters (single byte) or 250,000 (multi-byte).
-       // Using 400,000 characters is a safe bet to stay around 500KB.
-       const CHAR_CHUNK = 400000;
-       const totalLen = outputText.length;
-       let offset = 0;
-       let part = 0;
+    // Set loading state immediately to give UI feedback
+    setIsDownloading(true);
 
-       while (offset < totalLen) {
-         const chunk = outputText.slice(offset, offset + CHAR_CHUNK);
-         const blob = new Blob([chunk], { type: 'text/plain' });
-         
-         // Increment timestamp ID for each file so "next file has next timestamp"
-         const fileId = baseTimeId + part;
-         downloadBlob(blob, `${fileId}.txt`);
-         
-         offset += CHAR_CHUNK;
-         part++;
-       }
-    }
-  };
+    // Use setTimeout to push processing to next tick, unblocking UI
+    setTimeout(() => {
+        try {
+          // Filter only Output (translated) text
+          const outputText = transcripts
+            .filter(t => !t.isUser)
+            .map(t => t.text)
+            .join('\n\n');
+          
+          if (!outputText) {
+             setIsDownloading(false);
+             return;
+          }
+
+          const CHUNK_SIZE = 500 * 1024;
+          const now = new Date();
+          const baseTimeId = Math.floor(now.getTime() / 1000);
+          
+          const fullBlob = new Blob([outputText], { type: 'text/plain' });
+          
+          if (fullBlob.size <= CHUNK_SIZE) {
+             downloadBlob(fullBlob, `transcript_${baseTimeId}.txt`);
+          } else {
+             const CHAR_CHUNK = 400000;
+             const totalLen = outputText.length;
+             let offset = 0;
+             let part = 0;
+
+             while (offset < totalLen) {
+               const chunk = outputText.slice(offset, offset + CHAR_CHUNK);
+               const blob = new Blob([chunk], { type: 'text/plain' });
+               downloadBlob(blob, `transcript_${baseTimeId}_part${part+1}.txt`);
+               offset += CHAR_CHUNK;
+               part++;
+             }
+          }
+        } catch(e) {
+          console.error("Download failed", e);
+          setError("Download failed");
+        } finally {
+          setIsDownloading(false);
+        }
+    }, 50); // 50ms delay to allow React to render the "Saving..." state
+  }, [transcripts]);
 
   const isConnected = connectionState === ConnectionState.CONNECTED;
   const isConnecting = connectionState === ConnectionState.CONNECTING;
@@ -244,7 +254,7 @@ const App: React.FC = () => {
                  volume={inputVolume} 
                  isActive={true} 
                  className="h-2 md:h-3" 
-                 barCount={30}
+                 barCount={12}
                />
             </div>
 
@@ -257,7 +267,7 @@ const App: React.FC = () => {
                  volume={outputVolume} 
                  isActive={true} 
                  className="h-2 md:h-3"
-                 barCount={30}
+                 barCount={12}
                />
             </div>
         </div>
@@ -313,21 +323,16 @@ const App: React.FC = () => {
             </button>
          </div>
 
-         {/* LIVE TRANSLATION DISPLAY */}
-         <div className="w-full max-w-3xl px-6 text-center min-h-[80px] flex items-center justify-center">
-            {latestTranslation ? (
-              <p className="text-2xl md:text-3xl font-medium text-slate-100 leading-relaxed animate-in fade-in slide-in-from-bottom-2 duration-300">
-                "{latestTranslation}"
-              </p>
-            ) : (
-              <p className="text-slate-600 text-lg font-light italic">
-                {isConnected ? "Listening for speech..." : "Tap the microphone to start"}
-              </p>
-            )}
-         </div>
+         {/* LIVE DISPLAY COMPONENT - Paused if settings are open */}
+         <LiveDisplay 
+            transcripts={transcripts} 
+            isConnected={isConnected} 
+            isPaused={showSettings}
+         />
+
       </div>
 
-      {/* TRANSCRIPT LIST */}
+      {/* TRANSCRIPT LIST - Paused from re-rendering via useEffect check */}
       <main className="flex-1 overflow-y-auto p-4 bg-slate-950 scroll-smooth">
          <div className="max-w-3xl mx-auto space-y-4 pb-12">
             {transcripts.map((t) => (
@@ -375,11 +380,28 @@ const App: React.FC = () => {
                         </div>
                         <button 
                           onClick={handleDownloadTranscript}
-                          disabled={transcripts.length === 0}
-                          className="px-4 py-2 bg-cyan-900/20 hover:bg-cyan-900/40 text-cyan-400 hover:text-cyan-300 text-xs font-medium rounded border border-cyan-800/50 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={transcripts.length === 0 || isDownloading}
+                          className={`px-4 py-2 text-xs font-medium rounded border transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed
+                             ${isDownloading 
+                               ? 'bg-slate-800 text-slate-400 border-slate-700'
+                               : 'bg-cyan-900/20 hover:bg-cyan-900/40 text-cyan-400 hover:text-cyan-300 border-cyan-800/50'
+                             }
+                          `}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                          Download
+                          {isDownloading ? (
+                            <>
+                               <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                               </svg>
+                               Saving...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                              Download
+                            </>
+                          )}
                         </button>
                     </div>
                  </section>
@@ -458,7 +480,7 @@ const App: React.FC = () => {
               </div>
               
               <div className="p-4 bg-slate-900 border-t border-slate-800 text-center">
-                 <p className="text-[10px] text-slate-600 font-mono">v2.1.0 • Low Latency Audio Engine</p>
+                 <p className="text-[10px] text-slate-600 font-mono">version_2.10 • AI Speed Control • Smart Pause</p>
               </div>
            </div>
         </div>

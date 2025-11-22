@@ -24,6 +24,12 @@ export class AudioEngine {
   private config: AudioEngineConfig;
   private volumeInterval: any = null;
 
+  // Logic for Silence Injection
+  private lastSilenceInjectionTime: number = 0;
+  private silenceThreshold: number = 0.015; // Slightly lower threshold to be sensitive
+  private minSilenceInterval: number = 2500; // Check every ~2.5s (fits "2 to 5 sec" req)
+  private isSilenceDetected: boolean = false;
+
   constructor(config: AudioEngineConfig) {
     this.config = config;
   }
@@ -95,14 +101,11 @@ export class AudioEngine {
           sampleRate: 16000,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true // Hardware AGC
+          autoGainControl: true
         }
       });
 
-      // RACE CONDITION FIX: 
-      // Check if inputCtx was closed (e.g. by stopInput) while awaiting getUserMedia
       if (!this.inputCtx) {
-          // Clean up the stream we just got since we can't use it
           this.stream.getTracks().forEach(t => t.stop());
           this.stream = null;
           return;
@@ -121,8 +124,42 @@ export class AudioEngine {
 
       this.processor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
-        // Guard against context being closed mid-process
         if (!this.inputCtx) return;
+
+        // --- SILENCE INJECTION LOGIC ---
+        // Calculate RMS (Root Mean Square) for volume level
+        let sum = 0;
+        const sampleCount = 100; // Check first 100 samples for efficiency
+        for (let i = 0; i < sampleCount && i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sum / sampleCount);
+        const now = Date.now();
+
+        // Check if silence detected
+        if (rms < this.silenceThreshold) {
+           // Only inject if enough time has passed since last injection (2-5s rule)
+           if (!this.isSilenceDetected && (now - this.lastSilenceInjectionTime > this.minSilenceInterval)) {
+             
+             // Inject 0.7s of silence (16000Hz * 0.7 = 11200 samples)
+             const silenceLen = 11200; 
+             const silenceBuffer = new Int16Array(silenceLen); // Zeros
+             const base64Silence = this.arrayBufferToBase64(silenceBuffer.buffer);
+             
+             // Send silence packet
+             onData(base64Silence);
+             
+             this.lastSilenceInjectionTime = now;
+             this.isSilenceDetected = true;
+             // console.debug("AudioEngine: Injected 0.7s silence separator");
+           }
+        } else {
+           // Reset flag if noise returns significantly above threshold
+           if (rms > this.silenceThreshold * 1.5) {
+             this.isSilenceDetected = false;
+           }
+        }
+        // --------------------------------
 
         const currentRate = this.inputCtx.sampleRate || 48000;
         let finalData = inputData;
@@ -170,7 +207,6 @@ export class AudioEngine {
       this.source = null;
     }
     if (this.inputCtx) {
-      // Don't await close if it's already closed to prevent hanging
       if (this.inputCtx.state !== 'closed') {
         try { await this.inputCtx.close(); } catch(e) { console.warn(e); }
       }
@@ -208,7 +244,9 @@ export class AudioEngine {
         const source = this.outputCtx.createBufferSource();
         source.buffer = buffer;
         
-        // Connect Source -> Output Gain (which is connected to Analyser -> Speaker)
+        // REMOVED manual playbackRate calculation as requested.
+        // Speed control is now handled via Prompt Engineering in App.tsx
+        
         source.connect(this.outputGainNode);
 
         const currentTime = this.outputCtx.currentTime;
@@ -227,6 +265,7 @@ export class AudioEngine {
 
   private startVolumeMonitor() {
     if (this.volumeInterval) clearInterval(this.volumeInterval);
+    // 512ms interval for low CPU usage
     this.volumeInterval = setInterval(() => {
        if (this.inputAnalyser) {
          const d = new Uint8Array(this.inputAnalyser.frequencyBinCount);
@@ -238,7 +277,7 @@ export class AudioEngine {
          this.outputAnalyser.getByteFrequencyData(d);
          this.config.onOutputVolume(d[0] / 255);
        }
-    }, 100);
+    }, 512);
   }
   
   private downsample(input: Float32Array, inputRate: number, targetRate: number): Float32Array {
