@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ConnectionState, Transcript, LanguageMode } from './types';
 import { GeminiLiveService } from './services/geminiLiveService';
@@ -155,6 +156,61 @@ const App: React.FC = () => {
     liveServiceRef.current?.setOutputDevice(deviceId);
   };
 
+  // --- Download Logic ---
+  const downloadBlob = (blob: Blob, fileName: string) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadTranscript = () => {
+    // Filter only Output (translated) text
+    const outputText = transcripts
+      .filter(t => !t.isUser)
+      .map(t => t.text)
+      .join('\n\n');
+    
+    if (!outputText) return;
+
+    // 500KB in bytes approx
+    const CHUNK_SIZE = 500 * 1024;
+    
+    // Base time ID: 10s resolution
+    const baseTimeId = Math.floor(Date.now() / 10000);
+    
+    const fullBlob = new Blob([outputText], { type: 'text/plain' });
+    
+    if (fullBlob.size <= CHUNK_SIZE) {
+       downloadBlob(fullBlob, `${baseTimeId}.txt`);
+    } else {
+       // Split logic: naive string slicing for simplicity
+       // Note: Characters != Bytes, but safe enough for rough splitting
+       // Approx 1 char = 1 byte (EN) to 2-3 bytes (special chars)
+       // We use a safe char chunk size of 400,000 chars to stay under 500KB usually
+       const CHAR_CHUNK = 400000;
+       const totalLen = outputText.length;
+       let offset = 0;
+       let part = 0;
+
+       while (offset < totalLen) {
+         const chunk = outputText.slice(offset, offset + CHAR_CHUNK);
+         const blob = new Blob([chunk], { type: 'text/plain' });
+         
+         // Increment timestamp ID for each file so "next file has next timestamp"
+         const fileId = baseTimeId + part;
+         downloadBlob(blob, `${fileId}.txt`);
+         
+         offset += CHAR_CHUNK;
+         part++;
+       }
+    }
+  };
+
   const isConnected = connectionState === ConnectionState.CONNECTED;
   const isConnecting = connectionState === ConnectionState.CONNECTING;
 
@@ -305,6 +361,20 @@ const App: React.FC = () => {
 
               <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
                  
+                 {/* Data Export */}
+                 <section className="space-y-3">
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Data</h3>
+                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50 flex justify-between items-center">
+                        <span className="text-xs text-slate-300">Download Transcript (Output Only)</span>
+                        <button 
+                          onClick={handleDownloadTranscript}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-cyan-400 rounded border border-slate-700 transition-colors"
+                        >
+                          Download .txt
+                        </button>
+                    </div>
+                 </section>
+
                  {/* Language Settings */}
                  <section className="space-y-3">
                     <h3 className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Language Configuration</h3>

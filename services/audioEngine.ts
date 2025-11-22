@@ -11,6 +11,14 @@ export class AudioEngine {
   
   private inputAnalyser: AnalyserNode | null = null;
   private outputAnalyser: AnalyserNode | null = null;
+
+  // Gain Nodes for Volume Control
+  private inputGainNode: GainNode | null = null;
+  private outputGainNode: GainNode | null = null;
+  
+  // Store current gain levels (0.0 to 2.0, default 1.0)
+  private currentInputGain: number = 1.0;
+  private currentOutputGain: number = 1.0;
   
   private nextStartTime: number = 0;
   private config: AudioEngineConfig;
@@ -20,20 +28,41 @@ export class AudioEngine {
     this.config = config;
   }
 
+  public setInputGain(value: number) {
+    this.currentInputGain = value;
+    if (this.inputGainNode) {
+      this.inputGainNode.gain.value = value;
+    }
+  }
+
+  public setOutputGain(value: number) {
+    this.currentOutputGain = value;
+    if (this.outputGainNode) {
+      this.outputGainNode.gain.value = value;
+    }
+  }
+
   async initOutput(deviceId: string = 'default') {
     if (this.outputCtx) return;
 
     const AC = window.AudioContext || (window as any).webkitAudioContext;
-    // 24kHz is the native rate for Gemini's "Puck/Kore" voices usually. 
-    // Matching it prevents browser resampling artifacts.
+    if (!AC) return;
+
     this.outputCtx = new AC({ sampleRate: 24000, latencyHint: 'interactive' }) as ExtendedAudioContext;
     
     if (deviceId !== 'default' && typeof this.outputCtx.setSinkId === 'function') {
       try { await this.outputCtx.setSinkId(deviceId); } catch (e) { console.warn(e); }
     }
 
+    // Create Output Graph: Source -> Gain -> Analyser -> Destination
+    this.outputGainNode = this.outputCtx.createGain();
+    this.outputGainNode.gain.value = this.currentOutputGain;
+
     this.outputAnalyser = this.outputCtx.createAnalyser();
     this.outputAnalyser.fftSize = 32;
+    
+    // Connect permanent part of graph
+    this.outputGainNode.connect(this.outputAnalyser);
     this.outputAnalyser.connect(this.outputCtx.destination);
 
     this.nextStartTime = this.outputCtx.currentTime;
@@ -47,16 +76,15 @@ export class AudioEngine {
   }
 
   async startInput(deviceId: string, onData: (base64: string) => void) {
-    // cleanup previous
     await this.stopInput();
 
     const AC = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return;
     
-    // ATTEMPT 1: Create 16kHz Context (Native support = Fastest performance)
     try {
       this.inputCtx = new AC({ sampleRate: 16000, latencyHint: 'interactive' });
     } catch (e) {
-      this.inputCtx = new AC(); // Fallback to default (usually 48k)
+      this.inputCtx = new AC(); 
     }
 
     try {
@@ -64,47 +92,60 @@ export class AudioEngine {
         audio: {
           deviceId: deviceId !== 'default' ? { exact: deviceId } : undefined,
           channelCount: 1,
-          sampleRate: 16000, // Request 16k from HW
+          sampleRate: 16000,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true // Hardware AGC
         }
       });
 
+      // RACE CONDITION FIX: 
+      // Check if inputCtx was closed (e.g. by stopInput) while awaiting getUserMedia
+      if (!this.inputCtx) {
+          // Clean up the stream we just got since we can't use it
+          this.stream.getTracks().forEach(t => t.stop());
+          this.stream = null;
+          return;
+      }
+
       this.source = this.inputCtx.createMediaStreamSource(this.stream);
+      
+      // Create Input Graph: Source -> Gain -> Analyser -> Processor -> Destination
+      this.inputGainNode = this.inputCtx.createGain();
+      this.inputGainNode.gain.value = this.currentInputGain;
+
       this.inputAnalyser = this.inputCtx.createAnalyser();
       this.inputAnalyser.fftSize = 32;
 
-      // 4096 is the sweet spot for the Google GenAI API.
-      // 2048 is faster but can be jittery. 4096 ensures clean chunks.
       this.processor = this.inputCtx.createScriptProcessor(4096, 1, 1);
 
       this.processor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
-        const currentRate = this.inputCtx?.sampleRate || 48000;
+        // Guard against context being closed mid-process
+        if (!this.inputCtx) return;
 
+        const currentRate = this.inputCtx.sampleRate || 48000;
         let finalData = inputData;
 
-        // Downsample if we couldn't get a native 16k context
         if (currentRate !== 16000) {
            finalData = this.downsample(inputData, currentRate, 16000);
         }
 
-        // Convert to Int16 directly
         const pcm16 = new Int16Array(finalData.length);
         for (let i = 0; i < finalData.length; i++) {
            const s = Math.max(-1, Math.min(1, finalData[i]));
            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
 
-        // Send to API
         const base64 = this.arrayBufferToBase64(pcm16.buffer);
         onData(base64);
       };
 
-      this.source.connect(this.inputAnalyser);
+      // Connect Graph
+      this.source.connect(this.inputGainNode);
+      this.inputGainNode.connect(this.inputAnalyser);
       this.inputAnalyser.connect(this.processor);
-      this.processor.connect(this.inputCtx.destination); // Keep alive
+      this.processor.connect(this.inputCtx.destination);
 
     } catch (e: any) {
       this.config.onError("Mic Error: " + e.message);
@@ -120,12 +161,19 @@ export class AudioEngine {
       this.processor.disconnect();
       this.processor = null;
     }
+    if (this.inputGainNode) {
+      this.inputGainNode.disconnect();
+      this.inputGainNode = null;
+    }
     if (this.source) {
       this.source.disconnect();
       this.source = null;
     }
     if (this.inputCtx) {
-      await this.inputCtx.close();
+      // Don't await close if it's already closed to prevent hanging
+      if (this.inputCtx.state !== 'closed') {
+        try { await this.inputCtx.close(); } catch(e) { console.warn(e); }
+      }
       this.inputCtx = null;
     }
   }
@@ -134,19 +182,15 @@ export class AudioEngine {
     await this.stopInput();
     if (this.volumeInterval) clearInterval(this.volumeInterval);
     if (this.outputCtx) {
-      await this.outputCtx.close();
+      try { await this.outputCtx.close(); } catch(e) {}
       this.outputCtx = null;
     }
   }
 
-  /**
-   * Play Audio Chunk with low latency logic
-   */
   async queueAudioOutput(base64: string) {
-    if (!this.outputCtx) return;
+    if (!this.outputCtx || !this.outputGainNode) return;
     
     try {
-        // 1. Decode
         const binaryString = atob(base64);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -155,25 +199,19 @@ export class AudioEngine {
         }
         
         const int16 = new Int16Array(bytes.buffer);
-        // Gemini Output is 24kHz
         const buffer = this.outputCtx.createBuffer(1, int16.length, 24000); 
         const channelData = buffer.getChannelData(0);
         for (let i = 0; i < int16.length; i++) {
             channelData[i] = int16[i] / 32768.0;
         }
 
-        // 2. Schedule
         const source = this.outputCtx.createBufferSource();
         source.buffer = buffer;
-        source.connect(this.outputAnalyser!); // visualizer
-        this.outputAnalyser!.connect(this.outputCtx.destination); // speakers
+        
+        // Connect Source -> Output Gain (which is connected to Analyser -> Speaker)
+        source.connect(this.outputGainNode);
 
         const currentTime = this.outputCtx.currentTime;
-        
-        // DRIFT CORRECTION:
-        // If we are behind, play IMMEDIATELY.
-        // If we are slightly ahead, schedule it.
-        // If we are way behind, reset the timeline.
         
         if (this.nextStartTime < currentTime) {
             this.nextStartTime = currentTime;
@@ -202,8 +240,6 @@ export class AudioEngine {
        }
     }, 100);
   }
-
-  // --- Utils ---
   
   private downsample(input: Float32Array, inputRate: number, targetRate: number): Float32Array {
     if (inputRate === targetRate) return input;
