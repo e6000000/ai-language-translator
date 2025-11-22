@@ -180,8 +180,13 @@ const App: React.FC = () => {
     // 500KB in bytes approx
     const CHUNK_SIZE = 500 * 1024;
     
-    // Base time ID: 10s resolution
-    const baseTimeId = Math.floor(Date.now() / 10000);
+    // Logic: Seconds since midnight / 10 + (100000 - 6565)
+    // Adjusted offset: 93435
+    const now = new Date();
+    const midnight = new Date(now).setHours(0,0,0,0);
+    const secondsSinceMidnight = (now.getTime() - midnight) / 1000;
+    const timeUnit = Math.floor(secondsSinceMidnight / 10);
+    const baseTimeId = 93435 + timeUnit;
     
     const fullBlob = new Blob([outputText], { type: 'text/plain' });
     
@@ -189,9 +194,8 @@ const App: React.FC = () => {
        downloadBlob(fullBlob, `${baseTimeId}.txt`);
     } else {
        // Split logic: naive string slicing for simplicity
-       // Note: Characters != Bytes, but safe enough for rough splitting
-       // Approx 1 char = 1 byte (EN) to 2-3 bytes (special chars)
-       // We use a safe char chunk size of 400,000 chars to stay under 500KB usually
+       // 500KB is roughly 500,000 characters (single byte) or 250,000 (multi-byte).
+       // Using 400,000 characters is a safe bet to stay around 500KB.
        const CHAR_CHUNK = 400000;
        const totalLen = outputText.length;
        let offset = 0;
@@ -364,13 +368,18 @@ const App: React.FC = () => {
                  {/* Data Export */}
                  <section className="space-y-3">
                     <h3 className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Data</h3>
-                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50 flex justify-between items-center">
-                        <span className="text-xs text-slate-300">Download Transcript (Output Only)</span>
+                    <div className="bg-slate-950 p-4 rounded-lg border border-slate-800/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="flex flex-col">
+                           <span className="text-sm text-slate-300 font-medium">Download Transcript</span>
+                           <span className="text-[10px] text-slate-500">Export translated text (.txt)</span>
+                        </div>
                         <button 
                           onClick={handleDownloadTranscript}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-cyan-400 rounded border border-slate-700 transition-colors"
+                          disabled={transcripts.length === 0}
+                          className="px-4 py-2 bg-cyan-900/20 hover:bg-cyan-900/40 text-cyan-400 hover:text-cyan-300 text-xs font-medium rounded border border-cyan-800/50 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Download .txt
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                          Download
                         </button>
                     </div>
                  </section>
