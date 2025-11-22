@@ -8,7 +8,7 @@ import AudioVisualizer from './components/AudioVisualizer';
 const SUPPORTED_LANGUAGES = [
   'English', 'German', 'French', 'Spanish', 'Italian', 
   'Portuguese', 'Dutch', 'Polish', 'Russian', 'Japanese', 
-  'Korean', 'Chinese', 'Arabic', 'Hindi', 'Turkish'
+  'Korean', 'Chinese', 'Arabic', 'Hindi', 'Turkish', 'Thai', 'Romanian'
 ];
 
 const getSystemInstruction = (mode: LanguageMode, srcLang: string, tgtLang: string) => {
